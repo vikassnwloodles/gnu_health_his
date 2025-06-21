@@ -2,6 +2,10 @@ PYTHON_VERSION=3.12.3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $SCRIPT_DIR
 
+sudo apt update
+sudo apt install libcairo2-dev -y
+sudo apt install libgirepository1.0-dev -y
+
 if [ -d "env" ]; then
     echo "⏳ Activating virtual environment..."
     source env/bin/activate
@@ -48,5 +52,5 @@ fi
 echo "⏳ Installing requirements..."
 pip install -r requirements.txt
 echo -e "✅ Requirements installed successfully!\n"
-echo "🚀 Launched GNU Health GUI"
+echo "🚀 Launch GNU Health GUI"
 gnuhealth-client

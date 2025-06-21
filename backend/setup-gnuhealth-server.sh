@@ -3,7 +3,8 @@
 set -e
 set -o pipefail
 
-BASE_DIR=$(pwd)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd $SCRIPT_DIR
 
 # === Load .env config ===
 ENV_FILE=".env"
@@ -92,7 +93,6 @@ pip install --upgrade pip setuptools
 #fi
 
 GH_ARCHIVE="gnuhealth-latest.tar.gz"
-GH_DIR="gnuhealth-4.4.1"
 
 echo -e "\n\n📂 Preparing to download and extract GNU Health..."
 
@@ -128,6 +128,8 @@ else
     fi
 fi
 
+GH_DIR=$(tar -tzf "$GH_ARCHIVE" | head -1 | cut -d/ -f1 || true)
+# GH_DIR="gnuhealth-4.4.1"
 cd "$GH_DIR"
 
 # === Run GNU Health setup ===
@@ -186,10 +188,6 @@ python3 ./trytond-admin --all --database="$DB_NAME" --password
 
 # === Start GNU Health ===
 echo -e "\n\n🚀 Starting GNU Health..."
-#SERVICE_FILE="/etc/systemd/system/gnuhealth.service"
-
-#sudo cp "${BASE_DIR}/gnuhealth.service" "$SERVICE_FILE"
-#sudo chmod 644 "$SERVICE_FILE"
 
 # === Generate GNU Health systemd service if not already present ===
 SERVICE_FILE="/etc/systemd/system/gnuhealth.service"
