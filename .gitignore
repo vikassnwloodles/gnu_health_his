@@ -1,0 +1,4 @@
+.env
+*.tar.gz*
+gnuhealth-4.4.1/
+env/

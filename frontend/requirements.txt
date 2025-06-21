@@ -1,0 +1,5 @@
+gnuhealth-client==4.4.0
+pycairo==1.28.0
+PyGObject==3.50.0
+python-dateutil==2.9.0.post0
+six==1.17.0

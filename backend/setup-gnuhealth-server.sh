@@ -1,0 +1,231 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+BASE_DIR=$(pwd)
+
+# === Load .env config ===
+ENV_FILE=".env"
+if [ -f "$ENV_FILE" ]; then
+  echo "📥 Loading configuration from $ENV_FILE..."
+  set -o allexport
+  source "$ENV_FILE"
+  set +o allexport
+  echo "✅ Configuration loaded successfully!"
+else
+  echo "❌ .env file not found."
+  echo "Please create a .env file with the following variables:"
+  echo "DB_USER=gnuhealth"
+  echo "DB_PASS=your_secret_password"
+  echo "DB_NAME=health"
+  echo "PYTHON_VERSION=3.12.3"
+  exit 1
+fi
+
+# === Validate required env vars ===
+REQUIRED_VARS=("DB_USER" "DB_PASS" "DB_NAME" "PYTHON_VERSION")
+for var in "${REQUIRED_VARS[@]}"; do
+  if [ -z "${!var}" ]; then
+    echo "❌ Missing required variable: $var"
+    echo "💡 Please add '$var=...' to your .env file."
+    exit 1
+  fi
+done
+
+# === Install required packages ===
+echo -e "\n\n🔧 Installing required packages..."
+sudo apt update
+sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev \
+  libreadline-dev libsqlite3-dev wget curl llvm libncursesw5-dev xz-utils \
+  tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev git vim \
+  postgresql postgresql-contrib
+
+# === Start PostgreSQL service ===
+echo -e "\n\n🚀 Starting PostgreSQL..."
+sudo service postgresql start
+
+# === Install pyenv if not already present ===
+if [ ! -d "$HOME/.pyenv" ]; then
+  echo -e "\n\n📦 Installing pyenv..."
+  curl https://pyenv.run | bash
+fi
+
+# === Set up pyenv for current shell ===
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+
+# === Persist pyenv config ===
+if ! grep -q 'PYENV_ROOT' "$HOME/.bashrc"; then
+  echo -e "\n# Pyenv setup" >> "$HOME/.bashrc"
+  {
+    echo 'export PYENV_ROOT="$HOME/.pyenv"'
+    echo 'export PATH="$PYENV_ROOT/bin:$PATH"'
+    echo 'eval "$(pyenv init --path)"'
+    echo 'eval "$(pyenv init -)"'
+  } >> "$HOME/.bashrc"
+fi
+
+# === Install Python version if not installed ===
+if ! pyenv versions --bare | grep -qx "$PYTHON_VERSION"; then
+  echo -e "\n\n🐍 Installing Python $PYTHON_VERSION..."
+  pyenv install "$PYTHON_VERSION"
+fi
+
+pyenv global "$PYTHON_VERSION"
+pip install --upgrade pip setuptools
+
+# === Download and extract GNU Health ===
+#GH_ARCHIVE="gnuhealth-latest.tar.gz"
+#GH_DIR="gnuhealth-4.4.1"
+
+#if [ ! -f "$GH_ARCHIVE" ]; then
+#  echo "⬇️ Downloading GNU Health..."
+#  wget "https://ftp.gnu.org/gnu/health/$GH_ARCHIVE"
+#fi
+
+#if [ ! -d "$GH_DIR" ]; then
+#  echo "📦 Extracting GNU Health..."
+#  tar xzf "$GH_ARCHIVE"
+#fi
+
+GH_ARCHIVE="gnuhealth-latest.tar.gz"
+GH_DIR="gnuhealth-4.4.1"
+
+echo -e "\n\n📂 Preparing to download and extract GNU Health..."
+
+if [ -f "$GH_ARCHIVE" ]; then
+    echo "📦 Archive found locally. Attempting extraction..."
+
+    if ! tar xzf "$GH_ARCHIVE"; then
+        echo "⚠️ Archive extraction failed. File may be corrupted. Re-downloading..."
+
+        rm -f "$GH_ARCHIVE"
+        wget "https://ftp.gnu.org/gnu/health/$GH_ARCHIVE"
+
+        if ! tar xzf "$GH_ARCHIVE"; then
+            echo "❌ Extraction failed again after re-download. Aborting."
+            exit 1
+        else
+            echo "✅ Extraction successful after re-download."
+        fi
+    else
+        echo "✅ Extraction successful."
+    fi
+
+else
+    echo "⬇️ Archive not found. Downloading now..."
+    wget "https://ftp.gnu.org/gnu/health/$GH_ARCHIVE"
+
+    echo "📦 Extracting newly downloaded archive..."
+    if ! tar xzf "$GH_ARCHIVE"; then
+        echo "❌ Extraction failed even after fresh download. Aborting."
+        exit 1
+    else
+        echo "✅ Extraction successful."
+    fi
+fi
+
+cd "$GH_DIR"
+
+# === Run GNU Health setup ===
+echo -e "\n\n⚙️ Running GNU Health setup..."
+wget -qO- https://ftp.gnu.org/gnu/health/gnuhealth-setup-latest.tar.gz | tar -xzvf -
+rm -rf "$HOME/gnuhealth"
+bash ./gnuhealth-setup install
+source "$HOME/.gnuhealthrc"
+#if [ ! -d "$HOME/gnuhealth" ]; then
+#	bash ./gnuhealth-setup install
+#	source "$HOME/.gnuhealthrc"
+#fi
+
+# === Setup PostgreSQL roles and DB ===
+echo -e "\n\n🛠️ Configuring PostgreSQL for GNU Health..."
+echo -e "\n🧑‍💻 Creating role for GNU Health..."
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
+  sudo -u postgres createuser --createdb --no-createrole --no-superuser "$DB_USER"
+  sudo -u postgres psql -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS'";
+  echo "✅ PostgreSQL role '$DB_USER' created."
+else
+  echo "ℹ️ PostgreSQL role '$DB_USER' already exists. Skipping."
+fi
+
+# Update pg_hba.conf
+echo -e "\n🔐 Updating pg_hba.conf..."
+PG_HBA="/etc/postgresql/$(ls /etc/postgresql)/main/pg_hba.conf"
+
+if ! sudo grep -E "^local\s+all\s+$DB_USER\s+md5" "$PG_HBA" > /dev/null; then
+    echo "local   all             $DB_USER                               md5" | sudo tee -a "$PG_HBA" > /dev/null
+    echo "✅ Added md5 authentication for user '$DB_USER' to pg_hba.conf."
+else
+    echo "ℹ️ md5 authentication for user '$DB_USER' already exists in pg_hba.conf. Skipping."
+fi
+
+sudo service postgresql reload
+
+# Create database if not exists
+echo -e "\n🛢️ Creating database for GNU Health..."
+if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+  sudo -u postgres createdb -O $DB_USER $DB_NAME
+  echo "✅ Database '$DB_NAME' created."
+else
+  echo "ℹ️ Database '$DB_NAME' already exists. Skipping."
+fi
+
+# === Update Tryton config ===
+TRYTON_CONF="$HOME/gnuhealth/tryton/server/config/trytond.conf"
+sed -i "2s|.*|uri = postgresql://$DB_USER:$DB_PASS@localhost:5432/|" "$TRYTON_CONF"
+
+# === Initialize GNU Health database ===
+TRYTOND_BIN_DIR="$HOME/gnuhealth/tryton/server/$(ls -1d ${HOME}/gnuhealth/tryton/server/trytond-* | grep -o 'trytond-[0-9.]\+' | sort -V | tail -1)/bin"
+cd "$TRYTOND_BIN_DIR"
+echo -e "\n\n🛠️ Initializing GNU Health Database"
+python3 ./trytond-admin --all --database="$DB_NAME" --password
+
+# === Start GNU Health ===
+echo -e "\n\n🚀 Starting GNU Health..."
+#SERVICE_FILE="/etc/systemd/system/gnuhealth.service"
+
+#sudo cp "${BASE_DIR}/gnuhealth.service" "$SERVICE_FILE"
+#sudo chmod 644 "$SERVICE_FILE"
+
+# === Generate GNU Health systemd service if not already present ===
+SERVICE_FILE="/etc/systemd/system/gnuhealth.service"
+USERNAME=$(whoami)
+USER_HOME=$(eval echo "~$USERNAME")
+
+if [ ! -f "$SERVICE_FILE" ]; then
+    echo -e "\n\n🛠️ Creating systemd service file for GNU Health..."
+
+    sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+[Unit]
+Description=GNU Health Server
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=$USERNAME
+WorkingDirectory=$USER_HOME
+ExecStart=$USER_HOME/start_gnuhealth.sh
+Environment="PYENV_ROOT=$USER_HOME/.pyenv"
+Environment="PATH=$USER_HOME/.pyenv/bin:$USER_HOME/.pyenv/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    echo "✅ Service file created at $SERVICE_FILE"
+else
+    echo "ℹ️ Service file already exists at $SERVICE_FILE. Skipping creation."
+fi
+
+# Activate the service
+sudo systemctl daemon-reload
+sudo systemctl enable gnuhealth.service
+sudo systemctl start gnuhealth.service
+sudo systemctl status gnuhealth.service --no-pager
+
