@@ -139,6 +139,7 @@ source "$HOME/.gnuhealthrc"
 
 # === Setup PostgreSQL roles and DB ===
 echo -e "\n\n🛠️ Configuring PostgreSQL for GNU Health..."
+
 echo -e "\n🧑‍💻 Creating role for GNU Health..."
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
   sudo -u postgres createuser --createdb --no-createrole --no-superuser "$DB_USER"
@@ -146,6 +147,19 @@ if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'
   echo "✅ PostgreSQL role '$DB_USER' created."
 else
   echo "ℹ️ PostgreSQL role '$DB_USER' already exists. Skipping."
+
+  echo -e "\n🔐 Testing PostgreSQL connection for user: '$DB_USER'..."
+
+  # Test PostgreSQL authentication with a 2-second timeout
+  if ! PGPASSWORD="$DB_PASS" psql -h "localhost" -U "$DB_USER" -d postgres -c '\q' -t 2 >/dev/null 2>&1; then
+      echo "❌ Authentication failed!"
+      echo "🔧 Possible fixes:"
+      echo "   1. Provide correct value for DB_PASS in: $SCRIPT_DIR/.env"
+      echo "🔄 Make sure to rerun the script after fixing the issue."
+      exit 1
+  fi
+
+  echo "✅ Success! PostgreSQL credentials are valid."
 fi
 
 
@@ -182,17 +196,8 @@ sed -i "2s|.*|uri = postgresql://$DB_USER:$DB_PASS@localhost:5432/|" "$TRYTON_CO
 TRYTOND_BIN_DIR="$HOME/gnuhealth/tryton/server/$(ls -1d ${HOME}/gnuhealth/tryton/server/trytond-* | grep -o 'trytond-[0-9.]\+' | sort -V | tail -1)/bin"
 cd "$TRYTOND_BIN_DIR"
 echo -e "\n\n🛠️ Initializing GNU Health Database..."
-ERROR_OUTPUT=$(python3 ./trytond-admin --all --database="$DB_NAME" --password 2>&1 || true)
-
-if echo "$ERROR_OUTPUT" | grep -q "FATAL:  password authentication failed"; then
-  echo "❌ PostgreSQL authentication failed for user '$DB_USER'."
-  echo "🔧 Possible Fix: If the role '$DB_USER' already exists in your PostgreSQL database, please ensure the correct password is provided in the 'DB_PASS' variable within your '.env' file located at '$SCRIPT_DIR/.env'."
-  echo -e "\n🔁 Make sure to rerun the script after verifying and updating the correct password in your '.env' file."
-  exit 1
-else
-  echo "$ERROR_OUTPUT"
-  echo "✅ Database initialization complete."
-fi
+python3 ./trytond-admin --all --database="$DB_NAME" --password
+echo "✅ Database initialization complete."
 
 
 # === Start GNU Health ===
