@@ -50,7 +50,8 @@ This script installs dependencies, sets up the database, and starts the Tryton G
 ### 4. Launch the GNU Health GUI Client
 
 ```bash
-./frontend/launch-gnuhealth-gui.sh
+./frontend/setup-gnuhealth-gui.sh     # Run once to set up the GUI client
+./frontend/launch-gnuhealth-gui.sh    # Use this to launch the client
 ```
 
 This launches the GUI frontend so you can start interacting with the HIS system right away.
