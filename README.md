@@ -29,9 +29,9 @@ nano ./backend/.env
 🔧 **Edit your `.env` file** with the correct values:
 
 ```env
-DB_USER=johndoe
+DB_USER=gnuhealth
 DB_PASS=securepassword123
-DB_NAME=mydb
+DB_NAME=health
 PYTHON_VERSION=3.12.3
 ```
 
@@ -44,6 +44,11 @@ PYTHON_VERSION=3.12.3
 ```
 
 This script installs dependencies, sets up the database, and starts the Tryton GNU Health backend server.
+
+> Note: If you decide updating the admin password in future, run the following command:
+```bash
+./backend/update-admin-password.sh
+```
 
 ---
 
@@ -99,5 +104,12 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 
 Maintained by [@vikassnwloodles](https://github.com/vikassnwloodles)
 For support or feedback, feel free to open an issue.
+
+---
+
+## 📖 Resources
+
+**Module Activation Tutorial:**
+https://www.youtube.com/watch?v=ivGwM9y6YOk
 
 ---
