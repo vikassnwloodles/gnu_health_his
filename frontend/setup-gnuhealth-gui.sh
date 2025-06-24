@@ -1,6 +1,6 @@
 PYTHON_VERSION=3.12.3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd $SCRIPT_DIR
+cd "$SCRIPT_DIR"
 
 echo "⏳ Installing System requirements..."
 sudo apt update

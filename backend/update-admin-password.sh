@@ -5,7 +5,7 @@ set -o pipefail
 trap 'echo -e "\n❌ An error occurred on line $LINENO. Please fix and rerun the script."; exit 1' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd $SCRIPT_DIR
+cd "$SCRIPT_DIR"
 
 
 # === Load .env config ===
