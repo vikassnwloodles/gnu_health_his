@@ -8,6 +8,9 @@ sudo apt install libcairo2-dev -y
 sudo apt install libgirepository1.0-dev -y
 echo -e "✅ System requirements installed successfully!\n"
 
+# Delete existing virtual environment directory before creating a new one
+rm -rf "$SCRIPT_DIR/env"
+
 if [ -d "env" ]; then
     echo "⏳ Activating virtual environment..."
     source env/bin/activate
